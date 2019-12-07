@@ -57,7 +57,7 @@ class BackyardFlyer(Drone):
 
             print('[info] tp {}'.format(self.target_position))
 
-            if altitude > 0.98 * self.target_position[2]:
+            if altitude > 0.90 * self.target_position[2]:
 
                 self.calculate_box()
 
@@ -176,12 +176,13 @@ class BackyardFlyer(Drone):
                 print('[info] we are flying to next wp at {} '.format(self.all_waypoints[self.waypoint_id]))
                 print('--------------------- {} ------------------------'.format(self.waypoint_counter))
 
-                # If we have finished one loop set to landing state
-                if self.waypoint_counter == 5: 
-                    self.landing_transition()
 
                 self.waypoint_counter += 1
-                time.sleep(0.2)
+                # If we have finished one loop set to landing state
+                if self.waypoint_counter == 5: 
+                    
+                    self.landing_transition()
+
 
 
                     
