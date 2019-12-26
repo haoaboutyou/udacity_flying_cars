@@ -1,6 +1,10 @@
 from enum import Enum
 from queue import PriorityQueue
 import numpy as np
+import copy
+import logging
+from bresenham import bresenham
+
 
 
 def create_grid(data, drone_altitude, safety_distance):
@@ -132,7 +136,7 @@ def a_star(grid, h, start, goal):
             current_cost = branch[current_node][0]
             
         if current_node == goal:        
-            print('Found a path.')
+            logging.info('Found a path.')
             found = True
             break
         else:
@@ -158,13 +162,112 @@ def a_star(grid, h, start, goal):
             n = branch[n][1]
         path.append(branch[n][1])
     else:
-        print('**********************')
-        print('Failed to find a path!')
-        print('**********************') 
+        logging.debug('**********************')
+        logging.debug('Failed to find a path!')
+        logging.debug('**********************') 
     return path[::-1], path_cost
 
 
 
 def heuristic(position, goal_position):
     return np.linalg.norm(np.array(position) - np.array(goal_position))
+
+
+def collinearity_check(m, eps=1.0):
+    # Returns True or False using matrix det of [p1,p2,p3]
+   
+    det = np.linalg.det(m)
+
+    logging.debug('det for mat {} is {}'.format(m, det))
+
+    return abs(det) < eps
+
+
+    
+def prune_path(path, grid):
+    ''' Given a path prune using collinearity and then Bresenham algorithm'''
+
+    # Collinearity part
+
+    pruned_path = copy.copy(path)
+    # i = 0
+    # while i < len(pruned_path) - 2:
+    #     logging.debug('[info] path {}'.format(path[i]))
+    #     mat = np.matrix([
+    #         [pruned_path[i    ][0]    ,pruned_path[i    ][1], 1.0],
+    #         [pruned_path[i + 1][0]    ,pruned_path[i + 1][1], 1.0],
+    #         [pruned_path[i + 2][0]    ,pruned_path[i + 2][1], 1.0]
+    #         ])
+
+    #     co_res = collinearity_check(mat)
+    #     logging.debug('collineary result {}'.format(co_res == True))
+
+    #     if co_res == True:
+    #         pruned_path.remove(pruned_path[i + 1])
+    #         logging.debug('removing node {}'.format(pruned_path[i + 1]))
+    #     else:
+    #         i += 1
+
+    # logging.info('Path length before prune using collineary {}, after {}'.format(len(path), len(pruned_path)))
+
+
+
+    # If 
+
+
+    current_node = pruned_path[0]
+
+    pruned_path_bres = []
+    pruned_path_bres.append(current_node)
+    i = 1
+    while i < len(pruned_path) - 1:
+        n1 = current_node
+        n2 = pruned_path[i + 1]
+
+        cells = list(bresenham(n1[0], n1[1], n2[0], n2[1]))
+
+        has_obsticle = False
+        for c in cells:
+            if grid[c[0], c[1]] == 1:
+                has_obsticle = True
+
+        if has_obsticle is False:
+            i += 1
+        else:
+            current_node = pruned_path[i]
+            pruned_path_bres.append(current_node)
+
+    pruned_path_bres.append(pruned_path[-1]) # Add last node
+    
+    logging.info('pruned_path {}'.format(pruned_path))
+    logging.info('pruned_path_bres {}'.format(pruned_path_bres))
+
+
+    return pruned_path_bres
+
+
+        # for j in range(i+1, len(pruned_path)):
+        #     n1 = pruned_path[i]
+        #     n2 = pruned_path[j]
+        #     cells = list(bresenham(n1[0], n1[1], n2[0], n2[1]))
+
+
+        #     for c in cells:
+        #         if grid[c[0], c[1]] == 1:
+        #             has_obsticle = True
+        #             break
+        #         else:
+        #             #print('C {} is possible'.format(c))
+        #             pass
+
+            
+        # #logging.debug('pruned_path : {}'.format(ps))
+
+
+
+    # Bresenham algorithm
+
+    # return pruned_path
+
+
 

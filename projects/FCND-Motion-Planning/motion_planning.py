@@ -5,11 +5,16 @@ from enum import Enum, auto
 
 import numpy as np
 
-from planning_utils import a_star, heuristic, create_grid
+from planning_utils import a_star, heuristic, create_grid, prune_path
+from drawing_utils import plot_grid_path
 from udacidrone import Drone
 from udacidrone.connection import MavlinkConnection
 from udacidrone.messaging import MsgID
 from udacidrone.frame_utils import global_to_local
+
+import logging
+
+logging.basicConfig(level=logging.INFO)
 
 
 class States(Enum):
@@ -24,10 +29,10 @@ class States(Enum):
 
 class MotionPlanning(Drone):
 
-    def __init__(self, connection):
+    def __init__(self, connection, target_lon, target_lat, use_grid = True):
         super().__init__(connection)
 
-        self.target_position = np.array([0.0, 0.0, 0.0])
+        self.target_position = np.array([target_lon, target_lat, 0.0])
         self.waypoints = []
         self.in_mission = True
         self.check_state = {}
@@ -73,47 +78,47 @@ class MotionPlanning(Drone):
 
     def arming_transition(self):
         self.flight_state = States.ARMING
-        print("arming transition")
+        logging.debug("arming transition")
         self.arm()
         self.take_control()
 
     def takeoff_transition(self):
         self.flight_state = States.TAKEOFF
-        print("takeoff transition")
+        logging.debug("takeoff transition")
         self.takeoff(self.target_position[2])
 
     def waypoint_transition(self):
         self.flight_state = States.WAYPOINT
-        print("waypoint transition")
+        logging.debug("waypoint transition")
         self.target_position = self.waypoints.pop(0)
-        print('target position', self.target_position)
+        logging.debug('target position {}'.format(self.target_position))
         self.cmd_position(self.target_position[0], self.target_position[1], self.target_position[2], self.target_position[3])
 
     def landing_transition(self):
         self.flight_state = States.LANDING
-        print("landing transition")
+        logging.debug("landing transition")
         self.land()
 
     def disarming_transition(self):
         self.flight_state = States.DISARMING
-        print("disarm transition")
+        logging.debug("disarm transition")
         self.disarm()
         self.release_control()
 
     def manual_transition(self):
         self.flight_state = States.MANUAL
-        print("manual transition")
+        logging.debug("manual transition")
         self.stop()
         self.in_mission = False
 
     def send_waypoints(self):
-        print("Sending waypoints to simulator ...")
+        logging.debug("Sending waypoints to simulator ...")
         data = msgpack.dumps(self.waypoints)
         self.connection._master.write(data)
 
     def plan_path(self):
         self.flight_state = States.PLANNING
-        print("Searching for a path ...")
+        logging.debug("Searching for a path ...")
         TARGET_ALTITUDE = 5
         SAFETY_DISTANCE = 5
 
@@ -125,7 +130,7 @@ class MotionPlanning(Drone):
             lat0 = float(line[1])
             lon0 = float(line[3])
 
-            print('[info] lat0 : {}, lon0 : {}'.format(lat0, lon0))
+            logging.debug(' lat0 : {}, lon0 : {}'.format(lat0, lon0))
 
         
         # TODO: set home position to (lon0, lat0, 0)
@@ -140,9 +145,9 @@ class MotionPlanning(Drone):
         # TODO: convert to current local position using global_to_local()
         local_position = global_to_local(global_position, (lon0, lat0, 0.0))
 
-        print('[info] current local position {}'.format(local_position))
+        logging.debug(' current local position {}'.format(local_position))
         
-        print('[info] global home {0}, position {1}, local position {2}'.format(self.global_home, self.global_position,
+        logging.debug(' global home {0}, position {1}, local position {2}'.format(self.global_home, self.global_position,
                                                                          self.local_position))
 
 
@@ -151,23 +156,28 @@ class MotionPlanning(Drone):
         
         # Define a grid for a particular altitude and safety margin around obstacles
         grid, north_offset, east_offset = create_grid(data, TARGET_ALTITUDE, SAFETY_DISTANCE)
-        print("North offset = {0}, east offset = {1}".format(north_offset, east_offset))
+        logging.debug("North offset = {0}, east offset = {1}".format(north_offset, east_offset))
         # Define starting point on the grid (this is just grid center)
         grid_start = (-north_offset, -east_offset)
         # TODO: convert start position to current position rather than map center
 
-        print('[info] original start {}'.format(grid_start))
-        grid_start = (grid_start[0] + int(local_position[0]), grid_start[1] + int(local_position[1]))
+        logging.debug(' original start {}'.format(grid_start))
+        debug = True
+        if debug is False: # return to home if we are debugging
+            grid_start = (grid_start[0] + int(local_position[0]), grid_start[1] + int(local_position[1]))
 
-        print('[info] new start {}'.format(grid_start))
+        logging.debug(' new start {}'.format(grid_start))
         
         # Set goal as some arbitrary position on the grid
         grid_goal = (-north_offset + 50, -east_offset + 50)
         # TODO: adapt to set goal as latitude / longitude position and convert
-        global_goal = (-122.397878, 37.796739, 7)
+        
+        global_goal = (self.target_position[0], self.target_position[1], TARGET_ALTITUDE)
 
-        print('[info] global_goal {}'.format(global_goal))
-        print('[info] global_home {}'.format((lon0, lat0, 0.0)))
+
+
+        logging.debug(' global_goal {}'.format(global_goal))
+        logging.debug(' global_home {}'.format((lon0, lat0, 0.0)))
 
         grid_goal = global_to_local(global_goal, (lon0, lat0, 0.0))
         grid_goal = (-north_offset + int(grid_goal[0]), -east_offset + int(grid_goal[1]))
@@ -177,14 +187,19 @@ class MotionPlanning(Drone):
         # Run A* to find a path from start to goal
         # TODO: add diagonal motions with a cost of sqrt(2) to your A* implementation
         # or move to a different search space such as a graph (not done here)
-        print('Local Start and Goal: ', grid_start, grid_goal)
+        logging.debug('Local Start and Goal: {} {}'.format(grid_start, grid_goal))
         path, _ = a_star(grid, heuristic, grid_start, grid_goal)
         # TODO: prune path to minimize number of waypoints
         # TODO (if you're feeling ambitious): Try a different approach altogether!
 
+
+        plot_grid_path(grid, grid_start, grid_goal, path, 'before_pruning')
+        path = prune_path(path, grid)
+        plot_grid_path(grid, grid_start, grid_goal, path, 'after_pruning')
+
         # Convert path to waypoints
         waypoints = [[p[0] + north_offset, p[1] + east_offset, TARGET_ALTITUDE, 0] for p in path]
-        print('[info] waypoints {}'.format(waypoints))
+        logging.debug(' waypoints {}'.format(waypoints))
         # Set self.waypoints
         self.waypoints = waypoints
         # TODO: send waypoints to sim (this is just for visualization of waypoints)
@@ -193,7 +208,7 @@ class MotionPlanning(Drone):
     def start(self):
         self.start_log("Logs", "NavLog.txt")
 
-        print("starting connection")
+        logging.debug("starting connection")
         self.connection.start()
 
         # Only required if they do threaded
@@ -210,7 +225,13 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     conn = MavlinkConnection('tcp:{0}:{1}'.format(args.host, args.port), timeout=60)
-    drone = MotionPlanning(conn)
+
+    # # Medium path
+    #     global_goal = (-122.396592, 37.795856, TARGET_ALTITUDE)
+
+    #     # Long path 
+    #     global_goal = (-122.397256, 37.796527, TARGET_ALTITUDE) 
+    drone = MotionPlanning(conn, target_lon=-122.40000, target_lat=37.795956)
     time.sleep(1)
 
     drone.start()
