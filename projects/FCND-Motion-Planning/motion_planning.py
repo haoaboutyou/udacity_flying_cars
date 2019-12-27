@@ -5,7 +5,7 @@ from enum import Enum, auto
 
 import numpy as np
 
-from planning_utils import a_star, heuristic, create_grid, prune_path
+from planning_utils import *
 from drawing_utils import plot_grid_path
 from udacidrone import Drone
 from udacidrone.connection import MavlinkConnection
@@ -29,7 +29,7 @@ class States(Enum):
 
 class MotionPlanning(Drone):
 
-    def __init__(self, connection, target_lon, target_lat, use_grid = True):
+    def __init__(self, connection, target_lon, target_lat, prune_using_collinearity=False, use_grid = True):
         super().__init__(connection)
 
         self.target_position = np.array([target_lon, target_lat, 0.0])
@@ -44,6 +44,9 @@ class MotionPlanning(Drone):
         self.register_callback(MsgID.LOCAL_POSITION, self.local_position_callback)
         self.register_callback(MsgID.LOCAL_VELOCITY, self.velocity_callback)
         self.register_callback(MsgID.STATE, self.state_callback)
+
+        # prune method
+        self.prune_using_collinearity = prune_using_collinearity
 
     def local_position_callback(self):
         if self.flight_state == States.TAKEOFF:
@@ -192,10 +195,24 @@ class MotionPlanning(Drone):
         # TODO: prune path to minimize number of waypoints
         # TODO (if you're feeling ambitious): Try a different approach altogether!
 
+        plot_grid_path(grid, grid_start, grid_goal, path, 'original')
+        
 
-        plot_grid_path(grid, grid_start, grid_goal, path, 'before_pruning')
-        path = prune_path(path, grid)
-        plot_grid_path(grid, grid_start, grid_goal, path, 'after_pruning')
+        if self.prune_using_collinearity is True:
+            start = time.time()
+            path = prune_path_collinearity(path, eps=0.005)
+            end = time.time()
+            logging.info('Pruning using collinearity took {}s'.format(end - start))
+
+            plot_grid_path(grid, grid_start, grid_goal, path, 'after_col_prune')
+
+        else:
+            start = time.time()
+            path = prune_path_bresenham(path, grid)
+            end = time.time()
+            logging.info('Pruning using bresenham took {}s'.format(end - start))
+            plot_grid_path(grid, grid_start, grid_goal, path, 'after_bres_prune')
+
 
         # Convert path to waypoints
         waypoints = [[p[0] + north_offset, p[1] + east_offset, TARGET_ALTITUDE, 0] for p in path]

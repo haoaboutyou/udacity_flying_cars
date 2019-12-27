@@ -15,7 +15,7 @@ def plot_grid_path(grid, start, end, path, plt_name='', show_fig=False):
 	print(pp)
 
 	plt.plot(pp[:, 1], pp[:, 0], 'g')
-	plt.scatter(pp[:, 1], pp[:, 0])
+	#plt.scatter(pp[:, 1], pp[:, 0], '.')
 
 	plt.xlabel('east')
 	plt.ylabel('north')
@@ -25,4 +25,4 @@ def plot_grid_path(grid, start, end, path, plt_name='', show_fig=False):
 
 
 	# Draw plts for report
-	plt.savefig(plt_name+'.png')
+	plt.savefig('figs/'+plt_name+'.png')

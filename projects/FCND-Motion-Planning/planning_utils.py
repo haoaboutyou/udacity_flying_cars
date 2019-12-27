@@ -173,7 +173,7 @@ def heuristic(position, goal_position):
     return np.linalg.norm(np.array(position) - np.array(goal_position))
 
 
-def collinearity_check(m, eps=1.0):
+def collinearity_check(m, eps):
     # Returns True or False using matrix det of [p1,p2,p3]
    
     det = np.linalg.det(m)
@@ -184,90 +184,73 @@ def collinearity_check(m, eps=1.0):
 
 
     
-def prune_path(path, grid):
-    ''' Given a path prune using collinearity and then Bresenham algorithm'''
-
-    # Collinearity part
+def prune_path_collinearity(path, eps):
+    ''' Given a path prune using collinearity'''
 
     pruned_path = copy.copy(path)
-    # i = 0
-    # while i < len(pruned_path) - 2:
-    #     logging.debug('[info] path {}'.format(path[i]))
-    #     mat = np.matrix([
-    #         [pruned_path[i    ][0]    ,pruned_path[i    ][1], 1.0],
-    #         [pruned_path[i + 1][0]    ,pruned_path[i + 1][1], 1.0],
-    #         [pruned_path[i + 2][0]    ,pruned_path[i + 2][1], 1.0]
-    #         ])
+    i = 0
+    while i < len(pruned_path) - 2:
+        logging.debug('[info] path {}'.format(path[i]))
+        mat = np.matrix([
+            [pruned_path[i    ][0]    ,pruned_path[i    ][1], 1.0],
+            [pruned_path[i + 1][0]    ,pruned_path[i + 1][1], 1.0],
+            [pruned_path[i + 2][0]    ,pruned_path[i + 2][1], 1.0]
+            ])
 
-    #     co_res = collinearity_check(mat)
-    #     logging.debug('collineary result {}'.format(co_res == True))
+        co_res = collinearity_check(mat, eps)
 
-    #     if co_res == True:
-    #         pruned_path.remove(pruned_path[i + 1])
-    #         logging.debug('removing node {}'.format(pruned_path[i + 1]))
-    #     else:
-    #         i += 1
+        if co_res == True:
+            pruned_path.remove(pruned_path[i + 1])
+            logging.debug('removing node {}'.format(pruned_path[i + 1]))
+        else:
+            i += 1
 
-    # logging.info('Path length before prune using collineary {}, after {}'.format(len(path), len(pruned_path)))
-
+    logging.info('Path length before prune using collineary {}, after {}'.format(len(path), len(pruned_path)))
 
 
-    # If 
+    return pruned_path
 
 
-    current_node = pruned_path[0]
+def prune_path_bresenham(path, grid):
+    """ Prune path using Bresenham with ray tracking """
+
+    current_node = path[0]
 
     pruned_path_bres = []
-    pruned_path_bres.append(current_node)
+
+    # Add first node
+    pruned_path_bres.append(current_node) 
+
     i = 1
-    while i < len(pruned_path) - 1:
+    while i < len(path) - 1:
         n1 = current_node
-        n2 = pruned_path[i + 1]
+        n2 = path[i + 1]
 
         cells = list(bresenham(n1[0], n1[1], n2[0], n2[1]))
 
-        has_obsticle = False
+        # Assume no obstacles in cells 
+        has_obstacle = False
         for c in cells:
             if grid[c[0], c[1]] == 1:
-                has_obsticle = True
+                has_obstacle = True
 
-        if has_obsticle is False:
+        # If no obstacles, move on to next node
+        if has_obstacle is False:
             i += 1
         else:
-            current_node = pruned_path[i]
+            current_node = path[i]
             pruned_path_bres.append(current_node)
 
-    pruned_path_bres.append(pruned_path[-1]) # Add last node
+    # Add last node if not in already
+    if path[-1] not in pruned_path_bres:
+        pruned_path_bres.append(path[-1]) 
     
-    logging.info('pruned_path {}'.format(pruned_path))
-    logging.info('pruned_path_bres {}'.format(pruned_path_bres))
+    logging.info('Path length before prune using Bresenham {}, after {}'.format(len(path), len(pruned_path_bres)))
 
 
     return pruned_path_bres
 
 
-        # for j in range(i+1, len(pruned_path)):
-        #     n1 = pruned_path[i]
-        #     n2 = pruned_path[j]
-        #     cells = list(bresenham(n1[0], n1[1], n2[0], n2[1]))
-
-
-        #     for c in cells:
-        #         if grid[c[0], c[1]] == 1:
-        #             has_obsticle = True
-        #             break
-        #         else:
-        #             #print('C {} is possible'.format(c))
-        #             pass
-
-            
-        # #logging.debug('pruned_path : {}'.format(ps))
-
-
-
-    # Bresenham algorithm
-
-    # return pruned_path
 
 
 
