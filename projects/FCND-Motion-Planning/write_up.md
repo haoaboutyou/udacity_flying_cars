@@ -17,7 +17,7 @@ We first by pruning the path using the collinearity between three points on the 
 But after pruning with collinearity, some unnecessary waypoints still existed (see figure below). The red points are waypoints, and we can see that the diagonal paths contains alot of unnecessary points. I tried to relax the threshold of the collinearity to resolve this problem, but then some paths would result in a collision with the build. 
 ![Alt text](figs/after_col_prune.png?)
 #### Ray tracing with Bresenham
-Using ray tracing with Bresenham to quickly draw lines, we can prune out points that are unnecessary. This algorithm starts by adding the first node in the original path `n0` to `path_pruned` and setting this to be the current node, then we use the Bresenham line drawing algorithm on the next point `(n0, n1)`. If none of the cells contain an obstacle, move on the next `(n0, n2)` and so on. Once an infessible point is found, the previous node is then appended to `path_pruned` and is also set to be the current node.
+Using ray tracing with Bresenham to quickly draw lines, we can prune out points that coolinearity had issues with. This algorithm starts by adding the first node in the original path `n0` to `path_pruned` and setting this to be the current node, then we use the Bresenham line drawing algorithm on the next point `(n0, n1)`. If none of the cells contain an obstacle, move on the next `(n0, n2)` and so on. Once an infessible point is found, the previous node is then appended to `path_pruned` and is also set to be the current node.
 ![Alt text](figs/after_bres_prune.png?)
 
 ##### Comparison
