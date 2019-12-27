@@ -7,6 +7,8 @@ from bresenham import bresenham
 
 
 
+
+
 def create_grid(data, drone_altitude, safety_distance):
     """
     Returns a grid representation of a 2D configuration space
@@ -162,9 +164,9 @@ def a_star(grid, h, start, goal):
             n = branch[n][1]
         path.append(branch[n][1])
     else:
-        logging.debug('**********************')
-        logging.debug('Failed to find a path!')
-        logging.debug('**********************') 
+        logging.error('**********************')
+        logging.error('Failed to find a path!')
+        logging.error('**********************') 
     return path[::-1], path_cost
 
 
@@ -190,7 +192,6 @@ def prune_path_collinearity(path, eps):
     pruned_path = copy.copy(path)
     i = 0
     while i < len(pruned_path) - 2:
-        logging.debug('[info] path {}'.format(path[i]))
         mat = np.matrix([
             [pruned_path[i    ][0]    ,pruned_path[i    ][1], 1.0],
             [pruned_path[i + 1][0]    ,pruned_path[i + 1][1], 1.0],

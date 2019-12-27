@@ -10,12 +10,9 @@ def plot_grid_path(grid, start, end, path, plt_name='', show_fig=False):
 	plt.plot(start[1], start[0], 'x')
 	plt.plot(end[1], end[0], 'x')
 
-
 	pp = np.array(path)
-	print(pp)
-
-	plt.plot(pp[:, 1], pp[:, 0], 'g')
-	#plt.scatter(pp[:, 1], pp[:, 0], '.')
+	plt.plot(pp[:, 1], pp[:, 0], 'g', linewidth=0.5)
+	plt.scatter(pp[:, 1], pp[:, 0],c='red', marker='X')
 
 	plt.xlabel('east')
 	plt.ylabel('north')
@@ -26,3 +23,5 @@ def plot_grid_path(grid, start, end, path, plt_name='', show_fig=False):
 
 	# Draw plts for report
 	plt.savefig('figs/'+plt_name+'.png')
+
+	plt.clf()

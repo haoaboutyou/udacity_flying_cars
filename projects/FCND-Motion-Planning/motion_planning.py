@@ -29,7 +29,7 @@ class States(Enum):
 
 class MotionPlanning(Drone):
 
-    def __init__(self, connection, target_lon, target_lat, prune_using_collinearity=False, use_grid = True):
+    def __init__(self, connection, target_lon, target_lat, pruning_method, use_grid = True):
         super().__init__(connection)
 
         self.target_position = np.array([target_lon, target_lat, 0.0])
@@ -46,7 +46,7 @@ class MotionPlanning(Drone):
         self.register_callback(MsgID.STATE, self.state_callback)
 
         # prune method
-        self.prune_using_collinearity = prune_using_collinearity
+        self.pruning_method = pruning_method
 
     def local_position_callback(self):
         if self.flight_state == States.TAKEOFF:
@@ -165,7 +165,7 @@ class MotionPlanning(Drone):
         # TODO: convert start position to current position rather than map center
 
         logging.debug(' original start {}'.format(grid_start))
-        debug = True
+        debug = False
         if debug is False: # return to home if we are debugging
             grid_start = (grid_start[0] + int(local_position[0]), grid_start[1] + int(local_position[1]))
 
@@ -191,6 +191,7 @@ class MotionPlanning(Drone):
         # TODO: add diagonal motions with a cost of sqrt(2) to your A* implementation
         # or move to a different search space such as a graph (not done here)
         logging.debug('Local Start and Goal: {} {}'.format(grid_start, grid_goal))
+        logging.info('Finding path using a* ...')
         path, _ = a_star(grid, heuristic, grid_start, grid_goal)
         # TODO: prune path to minimize number of waypoints
         # TODO (if you're feeling ambitious): Try a different approach altogether!
@@ -198,7 +199,7 @@ class MotionPlanning(Drone):
         plot_grid_path(grid, grid_start, grid_goal, path, 'original')
         
 
-        if self.prune_using_collinearity is True:
+        if self.pruning_method == 'collinear':
             start = time.time()
             path = prune_path_collinearity(path, eps=0.005)
             end = time.time()
@@ -206,12 +207,14 @@ class MotionPlanning(Drone):
 
             plot_grid_path(grid, grid_start, grid_goal, path, 'after_col_prune')
 
-        else:
+        elif self.pruning_method == 'bresenham':
             start = time.time()
             path = prune_path_bresenham(path, grid)
             end = time.time()
             logging.info('Pruning using bresenham took {}s'.format(end - start))
             plot_grid_path(grid, grid_start, grid_goal, path, 'after_bres_prune')
+        else:
+            logging.warning('Pruning {} not supported using default path'.format(self.pruning_method))
 
 
         # Convert path to waypoints
@@ -239,16 +242,19 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('--port', type=int, default=5760, help='Port number')
     parser.add_argument('--host', type=str, default='127.0.0.1', help="host address, i.e. '127.0.0.1'")
+
+    parser.add_argument('--target_lon', type=float, default=-122.40000, help='Target longitude')
+    parser.add_argument('--target_lat', type=float, default=37.795956, help='Target latitude')
+    parser.add_argument('--pruning_method', type=str, default='bresenham', help='Pruning method, can be bresenham or collinear')
     args = parser.parse_args()
 
     conn = MavlinkConnection('tcp:{0}:{1}'.format(args.host, args.port), timeout=60)
 
-    # # Medium path
-    #     global_goal = (-122.396592, 37.795856, TARGET_ALTITUDE)
+    target_lon = args.target_lon
+    target_lat = args.target_lat
+    pruning_method = args.pruning_method
 
-    #     # Long path 
-    #     global_goal = (-122.397256, 37.796527, TARGET_ALTITUDE) 
-    drone = MotionPlanning(conn, target_lon=-122.40000, target_lat=37.795956)
+    drone = MotionPlanning(conn, target_lon=target_lon, target_lat=target_lat, pruning_method=pruning_method)
     time.sleep(1)
 
     drone.start()
