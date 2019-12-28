@@ -48,6 +48,9 @@ class MotionPlanning(Drone):
         # prune method
         self.pruning_method = pruning_method
 
+        # grid or graph method
+        self.representation = 'graph'
+
     def local_position_callback(self):
         if self.flight_state == States.TAKEOFF:
             if -1.0 * self.local_position[2] > 0.95 * self.target_position[2]:
@@ -156,9 +159,17 @@ class MotionPlanning(Drone):
 
         # Read in obstacle map
         data = np.loadtxt('colliders.csv', delimiter=',', dtype='Float64', skiprows=2)
+
+        if self.representation == 'graph':
+            logging.info('Creating probabilistic map ...')
+            G = create_probabilistic_roadmap(data, num_samples=250)
         
         # Define a grid for a particular altitude and safety margin around obstacles
+        start = time.time()
         grid, north_offset, east_offset = create_grid(data, TARGET_ALTITUDE, SAFETY_DISTANCE)
+
+        end = time.time()
+        logging.info('create_grid time {}s'.format(end - start))
         logging.debug("North offset = {0}, east offset = {1}".format(north_offset, east_offset))
         # Define starting point on the grid (this is just grid center)
         grid_start = (-north_offset, -east_offset)
@@ -191,30 +202,38 @@ class MotionPlanning(Drone):
         # TODO: add diagonal motions with a cost of sqrt(2) to your A* implementation
         # or move to a different search space such as a graph (not done here)
         logging.debug('Local Start and Goal: {} {}'.format(grid_start, grid_goal))
-        logging.info('Finding path using a* ...')
-        path, _ = a_star(grid, heuristic, grid_start, grid_goal)
-        # TODO: prune path to minimize number of waypoints
-        # TODO (if you're feeling ambitious): Try a different approach altogether!
-
-        plot_grid_path(grid, grid_start, grid_goal, path, 'original')
         
 
-        if self.pruning_method == 'collinear':
-            start = time.time()
-            path = prune_path_collinearity(path, eps=0.005)
-            end = time.time()
-            logging.info('Pruning using collinearity took {}s'.format(end - start))
+        
 
-            plot_grid_path(grid, grid_start, grid_goal, path, 'after_col_prune')
+        logging.info('Finding path using a* ...')
+        path, _ = a_star(grid, heuristic, grid_start, grid_goal, representation=self.representation)
 
-        elif self.pruning_method == 'bresenham':
-            start = time.time()
-            path = prune_path_bresenham(path, grid)
-            end = time.time()
-            logging.info('Pruning using bresenham took {}s'.format(end - start))
-            plot_grid_path(grid, grid_start, grid_goal, path, 'after_bres_prune')
-        else:
-            logging.warning('Pruning {} not supported using default path'.format(self.pruning_method))
+        if self.representation == 'grid':
+            logging.info('Using grid method for planning ...')
+            
+            # TODO: prune path to minimize number of waypoints
+            # TODO (if you're feeling ambitious): Try a different approach altogether!
+
+            plot_grid_path(grid, grid_start, grid_goal, path, 'original')
+            
+
+            if self.pruning_method == 'collinear':
+                start = time.time()
+                path = prune_path_collinearity(path, eps=0.005)
+                end = time.time()
+                logging.info('Pruning using collinearity took {}s'.format(end - start))
+
+                plot_grid_path(grid, grid_start, grid_goal, path, 'after_col_prune')
+
+            elif self.pruning_method == 'bresenham':
+                start = time.time()
+                path = prune_path_bresenham(path, grid)
+                end = time.time()
+                logging.info('Pruning using bresenham took {}s'.format(end - start))
+                plot_grid_path(grid, grid_start, grid_goal, path, 'after_bres_prune')
+            else:
+                logging.warning('Pruning {} not supported using default path'.format(self.pruning_method))
 
 
         # Convert path to waypoints

@@ -4,6 +4,18 @@ import numpy as np
 import copy
 import logging
 from bresenham import bresenham
+from drawing_utils import *
+import time
+
+# For graphs
+from sklearn.neighbors import KDTree
+import networkx as nx
+from shapely.geometry import Polygon, Point, LineString
+
+
+from tqdm import tqdm
+
+
 
 
 
@@ -118,7 +130,8 @@ def valid_actions(grid, current_node):
     return valid_actions
 
 
-def a_star(grid, h, start, goal):
+def a_star(g, h, start, goal, representation='grid'):
+    """ g can be grid or graph """
 
     path = []
     path_cost = 0
@@ -142,18 +155,28 @@ def a_star(grid, h, start, goal):
             found = True
             break
         else:
-            for action in valid_actions(grid, current_node):
-                # get the tuple representation
-                da = action.delta
-                next_node = (current_node[0] + da[0], current_node[1] + da[1])
-                branch_cost = current_cost + action.cost
-                queue_cost = branch_cost + h(next_node, goal)
-                
-                if next_node not in visited:                
-                    visited.add(next_node)               
-                    branch[next_node] = (branch_cost, current_node, action)
-                    queue.put((queue_cost, next_node))
-             
+            if representation == 'grid':
+                for action in valid_actions(g, current_node):
+                    # get the tuple representation
+                    da = action.delta
+                    next_node = (current_node[0] + da[0], current_node[1] + da[1])
+                    branch_cost = current_cost + action.cost
+                    queue_cost = branch_cost + h(next_node, goal)
+                    
+                    if next_node not in visited:                
+                        visited.add(next_node)               
+                        branch[next_node] = (branch_cost, current_node, action)
+                        queue.put((queue_cost, next_node))
+            elif representation == 'graph':
+                for next_node in g[current_node]:
+                    cost = g.edges[current_node, next_node]['weight']
+                    branch_cost = current_cost + cost
+                    queue_cost = branch_cost + heuristic(next_node, goal)
+                    if next_node not in visited:
+                        visited.add(next_node)
+                        branch[next_node] = (branch_cost, current_node)
+                        queue.put((queue_cost, next_node))
+                 
     if found:
         # retrace steps
         n = goal
@@ -252,6 +275,117 @@ def prune_path_bresenham(path, grid):
     return pruned_path_bres
 
 
+""" Graph utils """
+def get_polygons(data):
+        polygons = []
+
+        for i in range(data.shape[0]):
+            n, e, h, d_n, d_e, d_h = data[i, :]
+
+            n1 = n - d_n
+            n2 = n + d_n
+            e1 = e - d_e
+            e2 = e + d_e
+            
+
+            corners = [
+                (n1, e1),
+                (n2, e1),
+                (n2, e2),
+                (n1, e2), 
+            ]
 
 
+            p = Polygon(corners)
+
+            polygons.append((p, h + d_h))
+        return polygons
+
+def collides(polygons, point):
+    # Returns true if point is inside poygons
+    test_point = Point(point)
+    for (p, h) in polygons:
+
+        if p.contains(test_point) and h >= point[2]:
+           
+
+            return True
+
+
+    return False
+
+def can_connect(n1, n2, polygons):
+    l = LineString([n1, n2])
+    for p in polygons:
+        if p[0].crosses(l) and p[1] >= min(n1[2], n2[2]):
+            return False
+
+    return True
+def create_probabilistic_roadmap(data, num_samples=200):                                                                                                            
+    """
+    Returns a 2.5 polygon configuration space given on data
+    """
+    
+
+    north_min = np.min(data[:, 0] - data[:, 3])
+    north_max = np.max(data[:, 0] + data[:, 3])
+
+    east_min = np.min(data[:, 1] - data[:, 4])
+    east_max = np.max(data[:, 1] + data[:, 4])
+
+
+    alt_min = 0
+    alt_max = 100
+
+    print(north_min, north_max, east_min, east_max, alt_min, alt_max)
+
+    xvals = np.random.uniform(north_min, north_max, num_samples)
+    yvals = np.random.uniform(east_min, east_max, num_samples)
+    zvals = np.random.uniform(alt_min, alt_max, num_samples)
+
+    samples = list(zip(xvals, yvals, zvals))
+
+
+    # Create polygons
+    logging.debug('creating polygons ...')
+    polygons = get_polygons(data)
+
+    # Add nodes if not in polygons
+    logging.debug('creating nodes ...')
+    nodes = []
+    for p in tqdm(samples):
+        if not collides(polygons, p):
+            nodes.append(p)
+
+
+
+    # Create a graph
+
+    logging.debug('creating graph ...')
+    G = nx.Graph()
+
+    tree = KDTree(nodes)
+
+    for n1 in nodes:
+        # get closest 5
+        ids = tree.query([n1], 3, return_distance=False)[0]
+        for i in ids:
+            n2 = nodes[i]
+
+            if can_connect(n1, n2, polygons) and n1 != n2:
+                G.add_edge(n1, n2, weight=1)
+
+
+    return G
+
+
+
+if  __name__ == '__main__':
+    data = np.loadtxt('colliders.csv', delimiter=',', dtype='Float64', skiprows=2)
+
+   
+    logging.info('Creating probabilistic map ...')
+    G = create_probabilistic_roadmap(data, num_samples=500)
+    grid, north_offset, east_offset = create_grid(data, 5, 5)
+    plot_graph(grid, G)
 
