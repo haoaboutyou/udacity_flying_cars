@@ -2,11 +2,12 @@
 ## Motion planning write up
 ### Explain the starter code
 
-The member function `plan_path()` is executed after the vehicle is armed. After, the path is planned 
-and the state is changed to `States.PLANNING`.
 
+Once the quadcopter is set to `MANUAL` and then `ARMED`, the `PLANNING` state is set and then the`plan_path` function is executed. This function is responsible for creating the waypoints (will be explained in detail below). Once the waypoints has been created, the take of transition function is called which also sets the state to `WAYPOINT`. The `local_position_callback` is responsible for determining if the quadcopter has reached a waypoint, if so the `waypoint_transition` function is called and the current waypoint is then poped from the waypoint array. If the waypoint array is empty the `landing_transition` function is called, which will trigger the landing procedure in the`velocity_callback` callback. 
 
-`colliders.csv` gives us information regarding the obstacles. First 3 columns indicates center of the obstacle and the last three columns gives us the halve lengths. Passing this information into the function `create_grid` gives us the configuration space at a given drone altitude and safety distance.
+#### `plan_path` function explaination
+
+This function first loads the osbstacle map `colliders.csv`; this gives us information regarding the obstacles. First 3 columns indicates center of the obstacle and the last three columns gives us the halve lengths. Passing this information into the function `create_grid` gives us the configuration space at a given drone altitude and safety distance. Then `A*` is used to plan the path using the grid, heuristic, start and end positions. 
 
 
 ### Path pruning
