@@ -29,10 +29,10 @@ class States(Enum):
 
 class MotionPlanning(Drone):
 
-    def __init__(self, connection, target_lon, target_lat, pruning_method, use_grid = True):
+    def __init__(self, connection, target_lon, target_lat, target_alt, pruning_method, use_grid = True):
         super().__init__(connection)
 
-        self.target_position = np.array([target_lon, target_lat, 0.0])
+        self.target_position = np.array([target_lon, target_lat, target_alt])
         self.waypoints = []
         self.in_mission = True
         self.check_state = {}
@@ -245,6 +245,7 @@ if __name__ == "__main__":
 
     parser.add_argument('--target_lon', type=float, default=-122.40000, help='Target longitude')
     parser.add_argument('--target_lat', type=float, default=37.795956, help='Target latitude')
+    parser.add_argument('--target_alt', type=float, default=0.0, help='Target altitude')
     parser.add_argument('--pruning_method', type=str, default='bresenham', help='Pruning method, can be bresenham or collinear')
     args = parser.parse_args()
 
@@ -252,9 +253,10 @@ if __name__ == "__main__":
 
     target_lon = args.target_lon
     target_lat = args.target_lat
+    target_alt = args.target_alt
     pruning_method = args.pruning_method
 
-    drone = MotionPlanning(conn, target_lon=target_lon, target_lat=target_lat, pruning_method=pruning_method)
+    drone = MotionPlanning(conn, target_lon=target_lon, target_lat=target_lat, target_alt=target_alt, pruning_method=pruning_method)
     time.sleep(1)
 
     drone.start()
