@@ -2,6 +2,8 @@
 
 # collinear
 # Go A
+python motion_planning.py --target_lon -122.392250 --target_lat 37.793350 
+
 python motion_planning.py --target_lon -122.4 --target_lat 37.795956 
 
 # Go B
