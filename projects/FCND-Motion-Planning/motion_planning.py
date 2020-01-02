@@ -14,7 +14,7 @@ from udacidrone.frame_utils import global_to_local
 
 import logging
 
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.DEBUG)
 
 
 class States(Enum):
@@ -126,7 +126,7 @@ class MotionPlanning(Drone):
         self.flight_state = States.PLANNING
         logging.debug("Searching for a path ...")
         TARGET_ALTITUDE = 5
-        SAFETY_DISTANCE = 5
+        SAFETY_DISTANCE = 1
 
         self.target_position[2] = TARGET_ALTITUDE
 
@@ -160,14 +160,19 @@ class MotionPlanning(Drone):
         # Read in obstacle map
         data = np.loadtxt('colliders.csv', delimiter=',', dtype='Float64', skiprows=2)
 
-        if self.representation == 'graph':
-            logging.info('Creating probabilistic map ...')
-            G = create_probabilistic_roadmap(data, num_samples=250)
-        
         # Define a grid for a particular altitude and safety margin around obstacles
         start = time.time()
-        grid, north_offset, east_offset = create_grid(data, TARGET_ALTITUDE, SAFETY_DISTANCE)
 
+        
+        
+        grid, north_offset, east_offset = create_grid(data, TARGET_ALTITUDE, SAFETY_DISTANCE)
+        if self.representation == 'graph':
+            logging.info('Creating vronoi graph ...')
+            G, north_offset, east_offset = create_voronoi_grid_and_edges(data, TARGET_ALTITUDE, SAFETY_DISTANCE)
+            
+        
+        
+        
         end = time.time()
         logging.info('create_grid time {}s'.format(end - start))
         logging.debug("North offset = {0}, east offset = {1}".format(north_offset, east_offset))
@@ -206,9 +211,30 @@ class MotionPlanning(Drone):
 
         
 
-        logging.info('Finding path using a* ...')
-        path, _ = a_star(grid, heuristic, grid_start, grid_goal, representation=self.representation)
+        # A* for both grid and graph
+        
+        if self.representation == 'grid':
+            logging.info('Finding path using a* for grid ...')
+            path, _ = a_star(grid, heuristic, grid_start, grid_goal, representation=self.representation)
+        elif self.representation == 'graph':
+            logging.info('Finding path using a* for graph ...')
 
+            start_node = find_closest_node(grid_start, G)
+            end_node = find_closest_node(grid_goal, G)
+
+            logging.info('Start node : {}'.format(start_node))
+            logging.info('End node : {}'.format(end_node))
+
+            # Find start and end node in graph
+
+
+
+           
+
+            path, _ = a_star(G, heuristic, start_node, end_node, representation=self.representation)
+
+
+        # Path pruning
         if self.representation == 'grid':
             logging.info('Using grid method for planning ...')
             
@@ -234,7 +260,8 @@ class MotionPlanning(Drone):
                 plot_grid_path(grid, grid_start, grid_goal, path, 'after_bres_prune')
             else:
                 logging.warning('Pruning {} not supported using default path'.format(self.pruning_method))
-
+        elif self.representation == 'graph':
+            logging.info('Using graph representation ... ')
 
         # Convert path to waypoints
         waypoints = [[p[0] + north_offset, p[1] + east_offset, TARGET_ALTITUDE, 0] for p in path]

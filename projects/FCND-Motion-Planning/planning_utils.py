@@ -12,9 +12,12 @@ from sklearn.neighbors import KDTree
 import networkx as nx
 from shapely.geometry import Polygon, Point, LineString
 
+# For vronoi
+from scipy.spatial import Voronoi, voronoi_plot_2d
 
 from tqdm import tqdm
 
+logging.basicConfig(level=logging.DEBUG)
 
 
 
@@ -168,10 +171,12 @@ def a_star(g, h, start, goal, representation='grid'):
                         branch[next_node] = (branch_cost, current_node, action)
                         queue.put((queue_cost, next_node))
             elif representation == 'graph':
+                print('graph', g)
+                print('current node', current_node)
                 for next_node in g[current_node]:
                     cost = g.edges[current_node, next_node]['weight']
                     branch_cost = current_cost + cost
-                    queue_cost = branch_cost + heuristic(next_node, goal)
+                    queue_cost = branch_cost + h(next_node, goal)
                     if next_node not in visited:
                         visited.add(next_node)
                         branch[next_node] = (branch_cost, current_node)
@@ -275,108 +280,114 @@ def prune_path_bresenham(path, grid):
     return pruned_path_bres
 
 
-""" Graph utils """
-def get_polygons(data):
-        polygons = []
+""" 
+Graph utils 
+"""
 
-        for i in range(data.shape[0]):
-            n, e, h, d_n, d_e, d_h = data[i, :]
+def create_voronoi_grid_and_edges(data, drone_altitude, safety_distance):
+    """
+    Taken from online exercise
+    Returns a grid representation of a 2D configuration space
+    along with Voronoi graph edges given obstacle data and the
+    drone's altitude.
+    """
+    logging.info('Creating vironoi graph ...')
 
-            n1 = n - d_n
-            n2 = n + d_n
-            e1 = e - d_e
-            e2 = e + d_e
-            
+    # minimum and maximum north coordinates
+    north_min = np.floor(np.min(data[:, 0] - data[:, 3]))
+    north_max = np.ceil(np.max(data[:, 0] + data[:, 3]))
 
-            corners = [
-                (n1, e1),
-                (n2, e1),
-                (n2, e2),
-                (n1, e2), 
+    # minimum and maximum east coordinates
+    east_min = np.floor(np.min(data[:, 1] - data[:, 4]))
+    east_max = np.ceil(np.max(data[:, 1] + data[:, 4]))
+
+    # given the minimum and maximum coordinates we can
+    # calculate the size of the grid.
+    north_size = int(np.ceil((north_max - north_min)))
+    east_size = int(np.ceil((east_max - east_min)))
+
+    # Initialize an empty grid
+    grid = np.zeros((north_size, east_size))
+    # Center offset for grid
+    north_min_center = np.min(data[:, 0])
+    east_min_center = np.min(data[:, 1])
+    
+   
+    
+    # Define a list to hold Voronoi points
+    points = []
+    # Populate the grid with obstacles
+    for i in range(data.shape[0]):
+        north, east, alt, d_north, d_east, d_alt = data[i, :]
+
+        if alt + d_alt + safety_distance > drone_altitude:
+            obstacle = [
+                int(north - d_north - safety_distance - north_min_center),
+                int(north + d_north + safety_distance - north_min_center),
+                int(east - d_east - safety_distance - east_min_center),
+                int(east + d_east + safety_distance - east_min_center),
             ]
+            grid[obstacle[0]:obstacle[1]+1, obstacle[2]:obstacle[3]+1] = 1
+            
+            # add center of obstacles to points list
+            points.append([north - north_min, east - east_min])
 
+    # TODO: create a voronoi graph based on
+    # location of obstacle centres
 
-            p = Polygon(corners)
+    graph = Voronoi(points)
 
-            polygons.append((p, h + d_h))
-        return polygons
+    # TODO: check each edge from graph.ridge_vertices for collision
+    edges = []
+    edges = []
+    
+    logging.info('Finished voronoi vertices number : {}'.format(len(graph.ridge_vertices)))
+    G = nx.Graph()
+    for v in graph.ridge_vertices:
+        p1 = graph.vertices[v[0]]
+        p2 = graph.vertices[v[1]]
+        cells = list(bresenham(int(p1[0]), int(p1[1]), int(p2[0]), int(p2[1])))
+        hit = False
 
-def collides(polygons, point):
-    # Returns true if point is inside poygons
-    test_point = Point(point)
-    for (p, h) in polygons:
+        for c in cells:
+            # First check if we're off the map
+            if np.amin(c) < 0 or c[0] >= grid.shape[0] or c[1] >= grid.shape[1]:
+                hit = True
+                break
+            # Next check if we're in collision
+            if grid[c[0], c[1]] == 1:
+                hit = True
+                break
 
-        if p.contains(test_point) and h >= point[2]:
-           
-
-            return True
-
-
-    return False
-
-def can_connect(n1, n2, polygons):
-    l = LineString([n1, n2])
-    for p in polygons:
-        if p[0].crosses(l) and p[1] >= min(n1[2], n2[2]):
-            return False
-
-    return True
-def create_probabilistic_roadmap(data, num_samples=200):                                                                                                            
-    """
-    Returns a 2.5 polygon configuration space given on data
-    """
+        # If the edge does not hit on obstacle
+        # add it to the list
+        if not hit:
+            # array to tuple for future graph creation step)
+            p1 = (p1[0], p1[1])
+            p2 = (p2[0], p2[1])
+            G.add_edge(p1, p2, weight=np.linalg.norm(np.array(p1)-np.array(p2)))
     
 
-    north_min = np.min(data[:, 0] - data[:, 3])
-    north_max = np.max(data[:, 0] + data[:, 3])
+    return G, north_min_center, east_min_center
 
-    east_min = np.min(data[:, 1] - data[:, 4])
-    east_max = np.max(data[:, 1] + data[:, 4])
+def find_closest_node(node, graph):
+    # Returns closes node
 
+    dist_min = 10000000000
+    closest_node = None
+    for n in graph.nodes:
+        dist = np.linalg.norm(np.array(node) - np.array(n))
 
-    alt_min = 0
-    alt_max = 100
+        if dist < dist_min:
+            closest_node = n
+            dist_min = dist
 
-    print(north_min, north_max, east_min, east_max, alt_min, alt_max)
-
-    xvals = np.random.uniform(north_min, north_max, num_samples)
-    yvals = np.random.uniform(east_min, east_max, num_samples)
-    zvals = np.random.uniform(alt_min, alt_max, num_samples)
-
-    samples = list(zip(xvals, yvals, zvals))
-
-
-    # Create polygons
-    logging.debug('creating polygons ...')
-    polygons = get_polygons(data)
-
-    # Add nodes if not in polygons
-    logging.debug('creating nodes ...')
-    nodes = []
-    for p in tqdm(samples):
-        if not collides(polygons, p):
-            nodes.append(p)
+    return closest_node
 
 
 
-    # Create a graph
-
-    logging.debug('creating graph ...')
-    G = nx.Graph()
-
-    tree = KDTree(nodes)
-
-    for n1 in nodes:
-        # get closest 5
-        ids = tree.query([n1], 3, return_distance=False)[0]
-        for i in ids:
-            n2 = nodes[i]
-
-            if can_connect(n1, n2, polygons) and n1 != n2:
-                G.add_edge(n1, n2, weight=1)
 
 
-    return G
 
 
 
@@ -384,8 +395,10 @@ if  __name__ == '__main__':
     data = np.loadtxt('colliders.csv', delimiter=',', dtype='Float64', skiprows=2)
 
    
-    logging.info('Creating probabilistic map ...')
-    G = create_probabilistic_roadmap(data, num_samples=500)
-    grid, north_offset, east_offset = create_grid(data, 5, 5)
-    plot_graph(grid, G)
+    #G = create_probabilistic_roadmap(data, num_samples=500)
+    grid, north_offset, east_offset = create_grid(data, 5, 2)
+
+    g, a, b = create_voronoi_grid_and_edges(data, 5, 2)
+    print(g)
+    plot_graph(grid, g, 0, 0, start=(310.2389, 439.2315), end=(694.2389000000001, 213.23149999999998))
 

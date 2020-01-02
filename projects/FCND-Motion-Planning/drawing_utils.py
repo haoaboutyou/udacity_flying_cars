@@ -1,5 +1,6 @@
 import matplotlib.pyplot as plt
 import numpy as np
+from planning_utils import *
 
 
 
@@ -27,12 +28,11 @@ def plot_grid_path(grid, start, end, path, plt_name='', show_fig=False):
 	plt.clf()
 
 
-def plot_graph(grid, G):
-	#plt.imshow(grid, cmap='Greys', origin='lower')
+def plot_graph(grid, G,  nmin, emin, start=None, end=None, height=5, safety=5):
 
+	
+	plt.imshow(grid, cmap='Greys', origin='lower')
 
-	nmin = 0#np.min(data[:, 0])
-	emin = 0#np.min(data[:, 1])
 
 	#If you have a graph called "g" these plots should work
 	#Draw edges
@@ -42,6 +42,10 @@ def plot_graph(grid, G):
 	#Draw connected nodes in red
 	for n1 in G.nodes:
 		plt.scatter(n1[1] - emin, n1[0] - nmin, c='red')
+
+	if start != None and end != None:
+		plt.scatter(start[0], start[1], c='blue', marker='x')
+		plt.scatter(end[0], end[1], c='blue', marker='x')
 
 	plt.show()
 	plt.clf()
