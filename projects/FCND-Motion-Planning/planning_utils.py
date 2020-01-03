@@ -171,8 +171,7 @@ def a_star(g, h, start, goal, representation='grid'):
                         branch[next_node] = (branch_cost, current_node, action)
                         queue.put((queue_cost, next_node))
             elif representation == 'graph':
-                print('graph', g)
-                print('current node', current_node)
+
                 for next_node in g[current_node]:
                     cost = g.edges[current_node, next_node]['weight']
                     branch_cost = current_cost + cost
@@ -255,7 +254,7 @@ def prune_path_bresenham(path, grid):
         n1 = current_node
         n2 = path[i + 1]
 
-        cells = list(bresenham(n1[0], n1[1], n2[0], n2[1]))
+        cells = list(bresenham(int(n1[0]), int(n1[1]), int(n2[0]), int(n2[1])))
 
         # Assume no obstacles in cells 
         has_obstacle = False
