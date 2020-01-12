@@ -172,7 +172,6 @@ class MotionPlanning(Drone):
         logging.debug(' new start {}'.format(grid_start))
         
         # Set goal as some arbitrary position on the grid
-        grid_goal = (-north_offset + 50, -east_offset + 50)
         # TODO: adapt to set goal as latitude / longitude position and convert
         
         global_goal = (self.target_position[0], self.target_position[1], TARGET_ALTITUDE)
